@@ -2,7 +2,7 @@
 
 ## chat.py — agentic read only chat 
 
-> Uses: g023/Qwen3.5-9B-IQ2_M (https://huggingface.co/g023/g023-Qwen3.5-9B-GGUF)
+> Uses: g023/Qwen3.5-9B-IQ2_M (https://huggingface.co/g023/g023-Qwen3.5-9B-GGUF) (download and toss it in the same folder as chat.py - designed for the IQ2_M model)
 
 > Requires: locally installed llama-server (https://github.com/ggerganov/llama.cpp) by Georgi Gerganov
 
