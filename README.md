@@ -1,4 +1,4 @@
-# AROC - Agentic Read-Only Chat
+# Agentic Read-Only Chat
 
 ## chat.py — agentic read only chat 
 
@@ -12,7 +12,7 @@
 
 ---
 
-# AROC - chat.py
+# Agentic Read-Only Chat - chat.py
 
 **Version 0.1** — Self-contained agentic chat interface for Qwen3.5-9B-IQ2_M
 
