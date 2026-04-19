@@ -2,7 +2,7 @@
 
 ## chat.py — agentic read only chat 
 
-> Uses: g023/Qwen3.5-9B-IQ2_M (https://huggingface.co/g023/g023-Qwen3.5-9B-GGUF) (download and toss it in the same folder as chat.py - designed for the IQ2_M model)
+> Uses: g023/g023-Qwen3.5-9B-GGUF:IQ2_M (https://huggingface.co/g023/g023-Qwen3.5-9B-GGUF) (download and toss it in the same folder as chat.py - designed for the IQ2_M model)
 
 > Requires: locally installed llama-server (https://github.com/ggerganov/llama.cpp) by Georgi Gerganov
 
@@ -14,7 +14,7 @@
 
 # Agentic Read-Only Chat - chat.py
 
-**Version 0.1** — Self-contained agentic chat interface for Qwen3.5-9B-IQ2_M
+**Version 0.1** — Self-contained agentic chat interface for g023/g023-Qwen3.5-9B-GGUF:IQ2_M (https://huggingface.co/g023/g023-Qwen3.5-9B-GGUF)
 
 A rich terminal-based chat application powered by llama.cpp, featuring an auto-managed server backend, reasoning modes, and 7 built-in filesystem tools for interactive AI assistance.
 
@@ -33,8 +33,8 @@ A rich terminal-based chat application powered by llama.cpp, featuring an auto-m
 
 1. **Prerequisites**:
    - Linux system with CUDA-compatible GPU (tested on RTX 3060 12GB)
-   - llama.cpp binary in PATH 
-   - Qwen3.5-9B-IQ2_M.gguf model file in the same directory
+   - llama.cpp binary in PATH (you can go follow instructions for setup from (https://github.com/ggerganov/llama.cpp)
+   - g023/g023-Qwen3.5-9B-GGUF:IQ2_M (https://huggingface.co/g023/g023-Qwen3.5-9B-GGUF) model file in the same directory
 
 2. **Run**:
    ```bash
@@ -96,7 +96,7 @@ The AI has access to 7 read-only filesystem tools:
 
 ### Model Settings
 
-- **Model**: Qwen3.5-9B-IQ2_M.gguf (3.4GB, 2-bit quantization) (vroom vroom)
+- **Model**: g023/Qwen3.5-9B-IQ2_M (https://huggingface.co/g023/g023-Qwen3.5-9B-GGUF) (3.4GB, 2-bit quantization) (vroom vroom)
 - **Architecture**: Hybrid Mamba2-Attention (32 layers, 8 attention layers)
 - **Context**: 16384 tokens
 - **KV Cache**: q4_0 quantization
