@@ -1,187 +1,232 @@
-# Agentic Read-Only Chat
-
-## chat.py — agentic read only chat 
-
-> Uses: g023/g023-Qwen3.5-9B-GGUF:IQ2_M (https://huggingface.co/g023/g023-Qwen3.5-9B-GGUF) (download and toss it in the same folder as chat.py - designed for the IQ2_M model)
-
-> Requires: locally installed llama-server (https://github.com/ggerganov/llama.cpp) by Georgi Gerganov
-
-> Author: g023
-
-> License: MIT
+<p align="center">
+  <h1 align="center">AROC — Agentic Read-Only Chat</h1>
+  <p align="center">
+    A self-contained agentic terminal chat with 19 tools, powered by Qwen3.5-9B and llama.cpp
+  </p>
+  <p align="center">
+    <img src="https://img.shields.io/badge/version-2.0.0-blue" alt="Version">
+    <img src="https://img.shields.io/badge/python-3.8+-green" alt="Python">
+    <img src="https://img.shields.io/badge/dependencies-stdlib_only-brightgreen" alt="Dependencies">
+    <img src="https://img.shields.io/badge/license-MIT-orange" alt="License">
+    <img src="https://img.shields.io/badge/GPU-CUDA-76B900" alt="CUDA">
+  </p>
+</p>
 
 ---
 
-# Agentic Read-Only Chat - chat.py
+**AROC** is an offline-first, read-only agentic chat application that runs entirely on local hardware. It combines a 2-bit quantized 9B parameter model with 19 built-in tools for filesystem exploration, code analysis, task management, and working memory — all in a single Python file with zero pip dependencies.
 
-**Version 0.1** — Self-contained agentic chat interface for g023/g023-Qwen3.5-9B-GGUF:IQ2_M (https://huggingface.co/g023/g023-Qwen3.5-9B-GGUF)
+## Highlights
 
-A rich terminal-based chat application powered by llama.cpp, featuring an auto-managed server backend, reasoning modes, and 7 built-in filesystem tools for interactive AI assistance.
-
-## Features
-
-- **Auto-managed llama-server**: Automatically starts and manages a llama.cpp server with optimized anti-looping sampling parameters
-- **Reasoning modes**: Toggle between step-by-step thinking display (`/think`) and faster responses (`/nothink`)
-- **7 built-in tools**: Read files, list directories, find files, grep search, file metadata, get time, and subagent file analysis
-- **Streaming output**: Real-time token streaming with interleaved thinking display
-- **Multi-turn conversations**: Context-aware with automatic token pruning and session persistence
-- **Tool calling chains**: Models can invoke multiple tools in sequence with subagent delegation for complex tasks
-- **Session management**: Save/load conversations to/from JSON files
-- **Zero dependencies**: Pure Python stdlib implementation
+- **19 built-in tools** — filesystem ops, code analysis, todo tracking, session memory
+- **Single file** — one `chat.py`, pure Python stdlib, no installs
+- **Offline** — runs fully local on consumer GPUs (tested: RTX 3060 12GB)
+- **64K context** — large conversations with automatic pruning
+- **Agentic** — multi-turn tool chains up to 12 rounds per message
+- **Persistent state** — scratch pad, todos, and memory survive session save/load
 
 ## Quick Start
 
-1. **Prerequisites**:
-   - Linux system with CUDA-compatible GPU (tested on RTX 3060 12GB)
-   - llama.cpp binary in PATH (you can go follow instructions for setup from (https://github.com/ggerganov/llama.cpp)
-   - g023/g023-Qwen3.5-9B-GGUF:IQ2_M (https://huggingface.co/g023/g023-Qwen3.5-9B-GGUF) model file in the same directory
-
-2. **Run**:
-   ```bash
-   python3 chat.py
-   ```
-
-The application will automatically start a llama-server on port 19300 and launch the interactive chat interface.
-
-## Usage
-
-### Command Line Options
-
 ```bash
-python3 chat.py [OPTIONS]
+# Prerequisites: llama-server binary + model file
+# Get llama.cpp: https://github.com/ggerganov/llama.cpp
+# Get model:     https://huggingface.co/g023/g023-Qwen3.5-9B-GGUF
 
-Options:
-  --port PORT           Server port (default: 19300)
-  --model PATH          GGUF model file path (default: g023-Qwen3.5-9B-IQ2_M.gguf)
-  --ngl LAYERS          GPU layers to offload (default: 40)
-  --ctx TOKENS          Context window size (default: 16384)
-  --no-server           Connect to existing server instead of starting one
-  --think               Start in reasoning mode (thinking displayed)
-  --no-color            Disable ANSI color output
-  --help                Show help message
+# Place g023-Qwen3.5-9B-IQ2_M.gguf alongside chat.py, then:
+python3 chat.py
 ```
 
-### Interactive Commands
+AROC auto-starts a llama-server, loads the model, and drops you into an interactive chat. To connect to an existing server:
 
-Type these commands during chat:
-
-- `/think`      — Enable reasoning mode (step-by-step thinking)
-- `/nothink`    — Disable reasoning mode (faster responses)
-- `/clear`      — Clear conversation history
-- `/save FILE`  — Save session to JSON file
-- `/load FILE`  — Load session from JSON file
-- `/tokens`     — Show token usage statistics
-- `/tools`      — List available tools
-- `/model`      — Show model and sampling info
-- `/help`       — Show help
-- `/quit`       — Exit
-
-### Multi-line Input
-
-End a line with `\` to continue input on the next line.
+```bash
+python3 chat.py --no-server --port 19300
+```
 
 ## Tools
 
-The AI has access to 7 read-only filesystem tools:
+<details>
+<summary><b>Filesystem (8 tools)</b></summary>
 
-1. **read_file** — Read file contents with optional line ranges
-2. **list_dir** — List directory contents with sizes and dates
-3. **find_files** — Find files matching glob patterns
-4. **grep** — Search for regex patterns in files
-5. **file_info** — Get file metadata (size, permissions, etc.)
-6. **get_time** — Get current date, time, and system uptime
-7. **analyze_file** — Delegate deep file analysis to a focused subagent
+| Tool | Description |
+|------|-------------|
+| `read_file` | Read with optional line ranges (default max 200 lines) |
+| `head` | First N lines — quick file previews |
+| `tail` | Last N lines — logs and recent content |
+| `list_dir` | Directory listing with sizes and dates |
+| `find_files` | Glob pattern file search |
+| `grep` | Regex search across files |
+| `grep_context` | Regex search with surrounding context lines |
+| `file_info` | Size, permissions, timestamps, line count |
+
+</details>
+
+<details>
+<summary><b>Code Analysis (3 tools)</b></summary>
+
+| Tool | Description |
+|------|-------------|
+| `python_outline` | AST-based class/function extraction with line numbers |
+| `diff_files` | Unified diff between two files |
+| `analyze_file` | Subagent delegation for deep file analysis |
+
+</details>
+
+<details>
+<summary><b>Task Management (4 tools)</b></summary>
+
+| Tool | Description |
+|------|-------------|
+| `todo_add` | Add task with priority (high/medium/low) |
+| `todo_list` | List all todos with completion status |
+| `todo_done` | Mark task as done |
+| `todo_remove` | Remove task |
+
+</details>
+
+<details>
+<summary><b>Memory & State (4 tools)</b></summary>
+
+| Tool | Description |
+|------|-------------|
+| `scratch_pad` | Overwrite-style working notes |
+| `memory_append` | Append timestamped notes (accumulates) |
+| `memory_read` | Read all session memory |
+| `get_time` | Current date, time, and uptime |
+
+</details>
+
+## Architecture
+
+```
+┌───────────────────────────────────────────────────┐
+│  ChatUI  (terminal rendering, slash commands)      │
+│    ↕                                               │
+│  Agent  (tool dispatch, state, conversation loop)  │
+│    ↕                                               │
+│  LlamaServer  (HTTP → llama-server process)        │
+│    ↕                                               │
+│  llama-server  (GGUF inference, CUDA)              │
+└───────────────────────────────────────────────────┘
+```
+
+The Agent runs a loop: send messages → stream response → if tool calls, execute and loop (up to 12 turns) → if no tool calls, deliver final answer.
+
+Three in-session state mechanisms complement each other:
+
+| State | Behavior | Use Case |
+|-------|----------|----------|
+| **Scratch pad** | Overwrite | Current plan / working notes |
+| **Memory** | Append-only | Findings, decisions, facts |
+| **Todos** | Structured list | Multi-step task tracking |
+
+## Commands
+
+| Command | Action |
+|---------|--------|
+| `/think` | Enable reasoning display |
+| `/nothink` | Disable reasoning (faster) |
+| `/clear` | Clear conversation |
+| `/save FILE` | Save session (messages + state) |
+| `/load FILE` | Restore session |
+| `/pad` | Show scratch pad |
+| `/clearpad` | Clear scratch pad |
+| `/todos` | Show todo list |
+| `/memory` | Show memory notes |
+| `/tokens` | Token usage stats |
+| `/tools` | List tools |
+| `/model` | Model info |
+| `/quit` | Exit |
+
+**Multi-line input:** end a line with `\`  
+**Interrupt:** `Ctrl+C` during generation
 
 ## Configuration
 
-### Model Settings
+### CLI Options
 
-- **Model**: g023/Qwen3.5-9B-IQ2_M (https://huggingface.co/g023/g023-Qwen3.5-9B-GGUF) (3.4GB, 2-bit quantization) (vroom vroom)
-- **Architecture**: Hybrid Mamba2-Attention (32 layers, 8 attention layers)
-- **Context**: 16384 tokens
-- **KV Cache**: q4_0 quantization
+```
+--port PORT     Server port (default: 19300)
+--model PATH    GGUF model path
+--ngl LAYERS    GPU layers (default: 36)
+--ctx TOKENS    Context window (default: 64000)
+--no-server     Connect to existing server
+--think         Start in reasoning mode
+--no-color      Disable ANSI colors
+```
 
-### Sampling Parameters (Anti-looping optimized)
+### Model
 
-- Temperature: 0.3
-- Top-p: 0.9
-- Top-k: 40
-- Min-p: 0.05
-- Repeat penalty: 1.15
-- Frequency penalty: 0.2
-- Presence penalty: 0.0
+| Spec | Value |
+|------|-------|
+| Model | g023-Qwen3.5-9B-IQ2_M.gguf (3.4GB) |
+| Quantization | IQ2_M (2-bit) |
+| Architecture | Qwen3.5-9B Hybrid Mamba2-Attention |
+| Context | 64,000 tokens |
+| KV Cache | q4_0 quantized |
 
-### Server Configuration
+### Sampling
 
-- Batch size: 512
-- Threads: min(8, CPU count)
-- Host: 127.0.0.1
-- Max concurrent requests: 1
+Tuned specifically to prevent repetition loops at 2-bit quantization:
+
+```
+temperature=0.3  top_p=0.9  top_k=40  min_p=0.05
+repeat_penalty=1.15  frequency_penalty=0.2  presence_penalty=0.0
+```
+
+## Key Technical Detail: reasoning_format
+
+> **Critical for IQ2_M models**: The `reasoning_format: "deepseek"` server parameter is required for the model to produce actual response content. Without it, all tokens go to internal reasoning and `content` stays empty. This is a server-level parameter — prompt engineering cannot fix it.
+
+```python
+# Applied to all API calls:
+extra_sampling = {"reasoning_format": "deepseek"}
+```
 
 ## Examples
 
-### Basic Chat
 ```
-You ▸ What is 2+2?
-AI ▸ 4
-```
+You ▸ What's the structure of chat.py?
+  🔧 python_outline(path="chat.py")
+AI ▸ chat.py has 1887 lines with 5 main classes: LlamaServer, StreamParser, ...
 
-### Using Tools
-```
-You ▸ Read the first 5 lines of /etc/hostname
-AI ▸ 🔧 read_file(path="/etc/hostname", start_line=1, end_line=5)
-     ┌─ result
-     │ megabox
-     └─
-AI ▸ The file contains: megabox
-```
+You ▸ Compare line counts of chat.py and chat_test.py
+  🔧 file_info(path="chat.py")
+  🔧 file_info(path="chat_test.py")
+AI ▸ chat.py: 1,887 lines. chat_test.py: 709 lines.
 
-### Reasoning Mode
-```
-You ▸ /think
-⚙ Reasoning mode ON — model will think step-by-step
-
-You ▸ Explain how addition works
-AI ▸ 💭 Thinking process:
-     1. **Understand the request**: The user asked to explain how addition works...
-AI ▸ Addition is the mathematical operation of combining two or more numbers...
-```
-
-### Session Management
-```
-You ▸ /save my_session.json
-⚙ Session saved → my_session.json
-
-You ▸ /load my_session.json
-⚙ Loaded 12 messages from my_session.json
+You ▸ Create a review plan for error handling
+  🔧 todo_add(task="Find all try/except blocks", priority="high")
+  🔧 todo_add(task="Check error messages", priority="medium")
+AI ▸ Created 2 todos. Use /todos to track progress.
 ```
 
 ## Requirements
 
-- **Python**: 3.8+ (stdlib only)
-- **Hardware**: CUDA GPU with 12GB+ VRAM (tested on RTX 3060 w/12GB)
-- **Memory**: 64GB+ RAM recommended
-- **OS**: Linux
-- **llama.cpp**: Build 8826+ with reasoning support
+| Requirement | Details |
+|-------------|---------|
+| Python | 3.8+ (stdlib only) |
+| GPU | CUDA-compatible, 12GB+ VRAM |
+| RAM | 16GB+ (64GB recommended) |
+| OS | Linux |
+| llama.cpp | With `reasoning_format` support |
 
 ## Testing
-
-Run the comprehensive test suite:
 
 ```bash
 python3 chat_test.py
 ```
 
-Includes 70 unit tests and 5 integration tests (requires running server).
+## Version History
+
+| Version | Date | Changes |
+|---------|------|---------|
+| **2.0.0** | 2026-04-19 | 19 tools, reasoning_format fix, 64K context, in-session state, reasoning fallback |
+| 0.1 | 2026-04-18 | Initial release (7 tools, 16K context) |
 
 ## License
 
-MIT License
+MIT License — see [LICENSE](LICENSE)
 
-## Contributing
+## Author
 
-Contributions welcome! Please test thoroughly and ensure all tests pass.
-
-## Version History
-
-- **0.1** (2026-04-18): Initial release with full agentic chat functionality
+**g023** — [HuggingFace](https://huggingface.co/g023)
