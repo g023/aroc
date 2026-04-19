@@ -13,8 +13,11 @@ License: MIT
 A rich terminal chat interface powered by llama.cpp with:
   • Auto-managed llama-server backend with anti-looping optimizations
   • Reasoning (/think) and non-reasoning (/nothink) modes
-  • 7 built-in tools: read_file, list_dir, find_files, grep, file_info,
-    get_time, analyze_file (subagent)
+  • 19 built-in tools: read_file, head, tail, list_dir, find_files, grep,
+    grep_context, file_info, python_outline, diff_files, get_time,
+    scratch_pad, analyze_file (subagent), todo_add, todo_list, todo_done,
+    todo_remove, memory_append, memory_read
+  • In-session scratch pad, todo list, and memory for planning and tracking
   • Streaming token output with interleaved thinking display
   • Multi-turn tool calling chains with subagent delegation
   • Context-aware token management and session save/load
@@ -73,15 +76,18 @@ SAMPLING = {
     "presence_penalty": 0.0,
 }
 
-DEFAULT_PORT = 19300
+DEFAULT_PORT = 19300 # for llama-server API
 CONTEXT_SIZE = 64000
 KV_CACHE_TYPE = "q4_0"
 N_GPU_LAYERS = 36
 MAX_GEN_TOKENS = 16384
-MAX_TOOL_TURNS = 5
+MAX_TOOL_TURNS = 12
 SUBAGENT_MAX_TOKENS = 16384
 CONTEXT_PRUNE_RATIO = 0.75
-VERSION = "1.0.0"
+VERSION = "2.0.0"
+
+# Reasoning format for proper think/content separation
+REASONING_FORMAT = "deepseek"
 
 # ═══════════════════════════════════════════════════════════════════════
 # ANSI helpers
@@ -170,7 +176,7 @@ TOOL_DEFS = [
             "name": "read_file",
             "description": (
                 "Read the contents of a file. Supports optional line range "
-                "(1-based). Returns at most 500 lines per call."
+                "(1-based). Returns at most 200 lines per call. Use head/tail for quick previews."
             ),
             "parameters": {
                 "type": "object",
@@ -293,6 +299,118 @@ TOOL_DEFS = [
     {
         "type": "function",
         "function": {
+            "name": "head",
+            "description": "Read the first N lines of a file (default 20). Quick file preview.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "File path"},
+                    "lines": {"type": "integer", "description": "Number of lines (default 20)"},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "tail",
+            "description": "Read the last N lines of a file (default 20). Good for logs.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "File path"},
+                    "lines": {"type": "integer", "description": "Number of lines (default 20)"},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "grep_context",
+            "description": (
+                "Search for a regex pattern and return matches with surrounding "
+                "context lines. Like grep -C."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string", "description": "Regex pattern"},
+                    "path": {"type": "string", "description": "File to search"},
+                    "context": {
+                        "type": "integer",
+                        "description": "Lines of context before and after (default 3)",
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Max matches (default 10)",
+                    },
+                },
+                "required": ["pattern", "path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "python_outline",
+            "description": (
+                "Extract the structure of a Python file: classes, methods, functions, "
+                "and their line numbers. Great for understanding code organization."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Python file path"},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "diff_files",
+            "description": "Show differences between two text files in unified diff format.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file1": {"type": "string", "description": "First file path"},
+                    "file2": {"type": "string", "description": "Second file path"},
+                    "context_lines": {
+                        "type": "integer",
+                        "description": "Context lines around changes (default 3)",
+                    },
+                },
+                "required": ["file1", "file2"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "scratch_pad",
+            "description": (
+                "Your working memory. Read or write your scratch pad for plans, "
+                "notes, task tracking, and findings. Call with content to overwrite. "
+                "Call without content to read current notes."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "New content to write (omit to read current pad)",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_time",
             "description": "Get the current date, time, timezone, and system uptime.",
             "parameters": {"type": "object", "properties": {}},
@@ -324,6 +442,91 @@ TOOL_DEFS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "todo_add",
+            "description": "Add a task to your todo list. Returns the task ID.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task": {"type": "string", "description": "Task description"},
+                    "priority": {
+                        "type": "string",
+                        "enum": ["high", "medium", "low"],
+                        "description": "Priority level (default: medium)",
+                    },
+                },
+                "required": ["task"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "todo_list",
+            "description": "List all todo items with their status and priority.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "todo_done",
+            "description": "Mark a todo item as done by its ID number.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer", "description": "Todo item ID to mark done"},
+                },
+                "required": ["id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "todo_remove",
+            "description": "Remove a todo item by its ID number.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer", "description": "Todo item ID to remove"},
+                },
+                "required": ["id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "memory_append",
+            "description": (
+                "Append a note to persistent session memory. Unlike scratch_pad "
+                "(which overwrites), memory_append accumulates entries. "
+                "Use for logging findings, decisions, and key facts."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "note": {"type": "string", "description": "Note to append"},
+                    "tag": {
+                        "type": "string",
+                        "description": "Optional category tag (e.g. 'finding', 'decision', 'question')",
+                    },
+                },
+                "required": ["note"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "memory_read",
+            "description": "Read all accumulated session memory notes.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
 ]
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -350,7 +553,7 @@ def tool_read_file(path, start_line=1, end_line=None):
             lines = f.readlines()
         total = len(lines)
         s = max(1, int(start_line)) - 1
-        e = min(int(end_line), total) if end_line else min(s + 500, total)
+        e = min(int(end_line), total) if end_line else min(s + 200, total)
         sel = lines[s:e]
         hdr = f"[{fp}  lines {s+1}–{e} of {total}]"
         if e < total:
@@ -521,6 +724,148 @@ def tool_file_info(path):
         return f"Error: {exc}"
 
 
+def tool_head(path, lines=20):
+    fp = _resolve_path(path)
+    if not fp.exists():
+        return f"Error: not found: {fp}"
+    if not fp.is_file():
+        return f"Error: not a file: {fp}"
+    try:
+        with open(fp, "r", errors="replace") as f:
+            all_lines = f.readlines()
+        n = min(int(lines), len(all_lines))
+        hdr = f"[{fp}  first {n} of {len(all_lines)} lines]"
+        return hdr + "\n" + "".join(all_lines[:n])
+    except Exception as exc:
+        return f"Error: {exc}"
+
+
+def tool_tail(path, lines=20):
+    fp = _resolve_path(path)
+    if not fp.exists():
+        return f"Error: not found: {fp}"
+    if not fp.is_file():
+        return f"Error: not a file: {fp}"
+    try:
+        with open(fp, "r", errors="replace") as f:
+            all_lines = f.readlines()
+        n = min(int(lines), len(all_lines))
+        start = len(all_lines) - n
+        hdr = f"[{fp}  last {n} of {len(all_lines)} lines]"
+        return hdr + "\n" + "".join(all_lines[start:])
+    except Exception as exc:
+        return f"Error: {exc}"
+
+
+def tool_grep_context(pattern, path, context=3, max_results=10):
+    fp = _resolve_path(path)
+    if not fp.exists():
+        return f"Error: not found: {fp}"
+    if not fp.is_file():
+        return f"Error: not a file: {fp}"
+    try:
+        rx = re.compile(pattern, re.IGNORECASE)
+    except re.error as exc:
+        return f"Error: bad regex: {exc}"
+    try:
+        with open(fp, "r", errors="replace") as f:
+            lines = f.readlines()
+    except Exception as exc:
+        return f"Error: {exc}"
+    ctx = int(context)
+    hits = []
+    matched_lines = set()
+    for i, line in enumerate(lines):
+        if rx.search(line):
+            matched_lines.add(i)
+    if not matched_lines:
+        return f"[grep_context '{pattern}' in {fp}]\n  (no matches)"
+    # Build context blocks
+    blocks = []
+    count = 0
+    for i in sorted(matched_lines):
+        if count >= max_results:
+            break
+        count += 1
+        start = max(0, i - ctx)
+        end = min(len(lines), i + ctx + 1)
+        block = [f"--- match at line {i+1} ---"]
+        for j in range(start, end):
+            marker = ">>" if j == i else "  "
+            block.append(f"{marker} {j+1}: {lines[j].rstrip()}")
+        blocks.append("\n".join(block))
+    hdr = f"[grep_context '{pattern}' in {fp} — {len(matched_lines)} matches]"
+    return hdr + "\n" + "\n".join(blocks)
+
+
+def tool_python_outline(path):
+    fp = _resolve_path(path)
+    if not fp.exists():
+        return f"Error: not found: {fp}"
+    if not fp.is_file():
+        return f"Error: not a file: {fp}"
+    try:
+        with open(fp, "r", errors="replace") as f:
+            lines = f.readlines()
+    except Exception as exc:
+        return f"Error: {exc}"
+    outline = [f"[{fp} — {len(lines)} lines]"]
+    indent_stack = []  # track current class for methods
+    for i, line in enumerate(lines, 1):
+        stripped = line.rstrip()
+        if not stripped:
+            continue
+        indent = len(line) - len(line.lstrip())
+        # Match class/def/async def
+        m = re.match(r'^(\s*)(class|async\s+def|def)\s+(\w+)', line)
+        if m:
+            spaces, kind, name = m.group(1), m.group(2), m.group(3)
+            kind_clean = kind.replace('async ', 'async_')
+            # Extract signature for functions
+            sig = ""
+            if 'def' in kind:
+                sig_m = re.match(r'^\s*(?:async\s+)?def\s+(\w+\([^)]*\))', line)
+                if sig_m:
+                    sig = sig_m.group(1)
+                else:
+                    sig = name + "(...)"
+            else:
+                sig = name
+            prefix = "  " * (indent // 4) if indent > 0 else ""
+            outline.append(f"  {prefix}{kind_clean} {sig}  (line {i})")
+    if len(outline) == 1:
+        outline.append("  (no classes or functions found)")
+    return "\n".join(outline)
+
+
+def tool_diff_files(file1, file2, context_lines=3):
+    import difflib
+    fp1 = _resolve_path(file1)
+    fp2 = _resolve_path(file2)
+    if not fp1.exists():
+        return f"Error: not found: {fp1}"
+    if not fp2.exists():
+        return f"Error: not found: {fp2}"
+    try:
+        with open(fp1, "r", errors="replace") as f:
+            lines1 = f.readlines()
+        with open(fp2, "r", errors="replace") as f:
+            lines2 = f.readlines()
+    except Exception as exc:
+        return f"Error: {exc}"
+    diff = list(difflib.unified_diff(
+        lines1, lines2,
+        fromfile=str(fp1), tofile=str(fp2),
+        n=int(context_lines)
+    ))
+    if not diff:
+        return f"Files are identical ({len(lines1)} lines each)"
+    result = "".join(diff)
+    if len(result) > 8000:
+        result = result[:8000] + "\n… (truncated)"
+    return result
+
+
 def tool_get_time():
     now = datetime.now()
     info = {
@@ -542,13 +887,18 @@ def tool_get_time():
     return json.dumps(info, indent=2)
 
 
-# dispatch (analyze_file is handled by the Agent directly)
+# dispatch (analyze_file and scratch_pad are handled by the Agent directly)
 TOOL_DISPATCH = {
     "read_file": lambda a: tool_read_file(a.get("path", ""), a.get("start_line", 1), a.get("end_line")),
+    "head": lambda a: tool_head(a.get("path", ""), a.get("lines", 20)),
+    "tail": lambda a: tool_tail(a.get("path", ""), a.get("lines", 20)),
     "list_dir": lambda a: tool_list_dir(a.get("path", "."), a.get("recursive", False), a.get("show_hidden", False), a.get("max_depth", 3)),
     "find_files": lambda a: tool_find_files(a.get("pattern", "*"), a.get("root", "."), a.get("max_results", 50)),
     "grep": lambda a: tool_grep(a.get("pattern", ""), a.get("path", "."), a.get("recursive", True), a.get("max_results", 30), a.get("ignore_case", True)),
+    "grep_context": lambda a: tool_grep_context(a.get("pattern", ""), a.get("path", "."), a.get("context", 3), a.get("max_results", 10)),
     "file_info": lambda a: tool_file_info(a.get("path", ".")),
+    "python_outline": lambda a: tool_python_outline(a.get("path", "")),
+    "diff_files": lambda a: tool_diff_files(a.get("file1", ""), a.get("file2", ""), a.get("context_lines", 3)),
     "get_time": lambda _: tool_get_time(),
 }
 
@@ -772,19 +1122,29 @@ class Agent:
         self.total_comp_tokens = 0
         self.tool_calls_made = 0
         self.session_start = time.time()
+        self.scratch_pad = ""  # in-session working memory
+        self.todos = []  # list of {id, task, priority, done}
+        self._todo_counter = 0
+        self.memory = []  # list of {note, tag, time}
 
     # -- system prompt -----------------------------------------------------
     def _system(self):
         parts = [
-            "You are a helpful, expert AI assistant with read-only filesystem tools. "
-            "Use tools proactively when the user asks about files, code, or directories — "
-            "get real data rather than guessing. For large files or deep analysis, "
-            "use the analyze_file tool to delegate to a focused sub-agent.\n",
+            "You are AROC, an expert AI assistant with read-only filesystem tools "
+            "and planning/memory tools for managing complex tasks.\n\n",
+            "TOOL STRATEGY:\n"
+            "- Use head (first N lines) or tail (last N lines) for quick previews.\n"
+            "- Use python_outline to map code structure before diving into details.\n"
+            "- Use grep/grep_context to find specific code sections efficiently.\n"
+            "- Use read_file with start_line/end_line for targeted reading (avoid reading entire large files).\n"
+            "- Use scratch_pad to save/overwrite working notes.\n"
+            "- Use memory_append to log key findings and decisions (accumulates).\n"
+            "- Use todo_add/todo_list/todo_done to track multi-step plans.\n"
+            "- Use analyze_file to delegate deep file analysis to a sub-agent.\n"
+            "- Be concise. Cite line numbers when discussing code.\n\n",
             f"Working directory: {Path.cwd()}\n",
             f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n",
         ]
-        if not self.thinking:
-            parts.append("/no_think")
         return "".join(parts)
 
     # -- context management ------------------------------------------------
@@ -815,6 +1175,15 @@ class Agent:
         if name == "analyze_file":
             return self._subagent(args)
 
+        if name == "scratch_pad":
+            return self._handle_scratch_pad(args)
+
+        if name in ("todo_add", "todo_list", "todo_done", "todo_remove"):
+            return self._handle_todo(name, args)
+
+        if name in ("memory_append", "memory_read"):
+            return self._handle_memory(name, args)
+
         handler = TOOL_DISPATCH.get(name)
         if not handler:
             return f"Error: unknown tool '{name}'"
@@ -826,6 +1195,78 @@ class Agent:
         if len(result) > 12000:
             result = result[:12000] + "\n… (truncated)"
         return result
+
+    # -- scratch pad -------------------------------------------------------
+    def _handle_scratch_pad(self, args):
+        content = args.get("content")
+        if content is not None:
+            self.scratch_pad = content
+            return f"Scratch pad updated ({len(content)} chars)"
+        if self.scratch_pad:
+            return f"[Scratch Pad]\n{self.scratch_pad}"
+        return "(scratch pad is empty)"
+
+    def _handle_todo(self, name, args):
+        if name == "todo_add":
+            self._todo_counter += 1
+            item = {
+                "id": self._todo_counter,
+                "task": args.get("task", ""),
+                "priority": args.get("priority", "medium"),
+                "done": False,
+            }
+            self.todos.append(item)
+            return f"Added todo #{item['id']}: {item['task']} [{item['priority']}]"
+
+        if name == "todo_list":
+            if not self.todos:
+                return "(todo list is empty)"
+            lines = []
+            for t in self.todos:
+                mark = "✓" if t["done"] else "○"
+                lines.append(f"  {mark} #{t['id']} [{t['priority']}] {t['task']}")
+            done = sum(1 for t in self.todos if t["done"])
+            lines.append(f"\n{done}/{len(self.todos)} completed")
+            return "\n".join(lines)
+
+        if name == "todo_done":
+            tid = int(args.get("id", 0))
+            for t in self.todos:
+                if t["id"] == tid:
+                    t["done"] = True
+                    return f"Marked todo #{tid} as done: {t['task']}"
+            return f"Error: todo #{tid} not found"
+
+        if name == "todo_remove":
+            tid = int(args.get("id", 0))
+            for i, t in enumerate(self.todos):
+                if t["id"] == tid:
+                    self.todos.pop(i)
+                    return f"Removed todo #{tid}: {t['task']}"
+            return f"Error: todo #{tid} not found"
+
+        return f"Error: unknown todo operation '{name}'"
+
+    def _handle_memory(self, name, args):
+        if name == "memory_append":
+            entry = {
+                "note": args.get("note", ""),
+                "tag": args.get("tag", ""),
+                "time": datetime.now().strftime("%H:%M:%S"),
+            }
+            self.memory.append(entry)
+            return f"Memory #{len(self.memory)} saved: [{entry['tag'] or 'note'}] {entry['note'][:80]}"
+
+        if name == "memory_read":
+            if not self.memory:
+                return "(session memory is empty)"
+            lines = []
+            for i, m in enumerate(self.memory, 1):
+                tag = f"[{m['tag']}] " if m["tag"] else ""
+                lines.append(f"  #{i} ({m['time']}) {tag}{m['note']}")
+            return "\n".join(lines)
+
+        return f"Error: unknown memory operation '{name}'"
 
     # -- subagent ----------------------------------------------------------
     def _subagent(self, args):
@@ -840,12 +1281,15 @@ class Agent:
         msgs = [
             {"role": "system", "content": (
                 "You are a focused file-analysis assistant. Analyze the provided "
-                "file and answer concisely. Cite line numbers when relevant.\n/no_think"
+                "file and answer concisely. Cite line numbers when relevant."
             )},
             {"role": "user", "content": f"File: {path}\n\n{content}\n\n---\nQuestion: {question}"},
         ]
         try:
-            body = self.server.chat(msgs, max_tokens=SUBAGENT_MAX_TOKENS)
+            body = self.server.chat(
+                msgs, max_tokens=SUBAGENT_MAX_TOKENS,
+                extra_sampling={"reasoning_format": REASONING_FORMAT},
+            )
             msg = body["choices"][0]["message"]
             result = msg.get("content") or ""
             # If server uses native reasoning, content may be empty during thinking;
@@ -873,7 +1317,8 @@ class Agent:
         for _turn in range(MAX_TOOL_TURNS):
             try:
                 resp = self.server.chat_stream(
-                    self._build_messages(), tools=TOOL_DEFS
+                    self._build_messages(), tools=TOOL_DEFS,
+                    extra_sampling={"reasoning_format": REASONING_FORMAT},
                 )
             except (urllib.error.URLError, OSError) as exc:
                 err = f"[server error: {exc}]"
@@ -989,7 +1434,30 @@ class Agent:
                 continue  # next turn — model sees tool results
             else:
                 # no tool calls → final answer
-                self.messages.append({"role": "assistant", "content": content_buf})
+                # Fallback: if model produced only reasoning with no content,
+                # use reasoning as content (common with 2-bit models)
+                if not content_buf.strip() and think_buf.strip():
+                    # Clean up reasoning: remove any leaked tool_call tags
+                    fallback = think_buf.strip()
+                    # Strip malformed tool_call blocks that leaked into reasoning
+                    fallback = re.sub(
+                        r'<tool_call>.*?</tool_call>',
+                        '', fallback, flags=re.DOTALL
+                    ).strip()
+                    # Also remove unclosed tool_call blocks at the end
+                    fallback = re.sub(
+                        r'<tool_call>.*$',
+                        '', fallback, flags=re.DOTALL
+                    ).strip()
+                    if fallback:
+                        all_content += fallback
+                        if on_content:
+                            on_content(fallback)
+                        self.messages.append({"role": "assistant", "content": fallback})
+                    else:
+                        self.messages.append({"role": "assistant", "content": content_buf})
+                else:
+                    self.messages.append({"role": "assistant", "content": content_buf})
                 break
 
         self.total_prompt_tokens += usage["prompt_tokens"]
@@ -1018,7 +1486,7 @@ class ChatUI:
     def banner(self, server, agent):
         bar = "═" * 60
         print(f"\n{_w(C.BMAGENTA, bar)}")
-        print(f"{_w(C.BMAGENTA, '  Qwen3.5-9B-IQ2_M • Agentic Chat')}")
+        print(f"{_w(C.BMAGENTA, '  AROC • Agentic Read-Only Chat')}")
         print(f"{_w(C.BMAGENTA, bar)}")
         print(_w(C.GRAY, f"  Model   : {MODEL_NAME}"))
         print(_w(C.GRAY, f"  Server  : {server.base_url}"))
@@ -1111,6 +1579,10 @@ class ChatUI:
   {_w(C.BOLD, '/clear')}      Clear conversation history
   {_w(C.BOLD, '/save FILE')}  Save session to JSON file
   {_w(C.BOLD, '/load FILE')}  Load session from JSON file
+  {_w(C.BOLD, '/pad')}        Show scratch pad contents
+  {_w(C.BOLD, '/clearpad')}   Clear the scratch pad
+  {_w(C.BOLD, '/todos')}      Show todo list
+  {_w(C.BOLD, '/memory')}     Show session memory notes
   {_w(C.BOLD, '/tokens')}     Show token usage statistics
   {_w(C.BOLD, '/tools')}      List available tools
   {_w(C.BOLD, '/model')}      Show model & sampling info
@@ -1119,9 +1591,12 @@ class ChatUI:
 
 {_w(C.BYELLOW, 'Tips:')}
   • Ask about files:   "Read /etc/hostname"
-  • Browse code:       "What functions are in chat.py?"
+  • Browse code:       "What functions are in chat.py?" or use python_outline
   • Search:            "Find all .py files under RELEASE/"
+  • Context search:    "Search for 'def main' with surrounding code"
   • Analyze:           "Analyze the main() function in iq2m_stress_test.py"
+  • Compare:           "Diff chat.py and chat_test.py"
+  • Track work:        "Add a todo to check all error handlers"
   • Multi-line:        End a line with \\ to continue on the next line
   • Interrupt:         Ctrl+C during generation stops the response
 """)
@@ -1188,6 +1663,10 @@ def _save_session(agent, path, ui):
         "version": VERSION,
         "messages": agent.messages,
         "thinking": agent.thinking,
+        "scratch_pad": agent.scratch_pad,
+        "todos": agent.todos,
+        "todo_counter": agent._todo_counter,
+        "memory": agent.memory,
         "stats": {
             "prompt_tokens": agent.total_prompt_tokens,
             "comp_tokens": agent.total_comp_tokens,
@@ -1209,6 +1688,10 @@ def _load_session(agent, path, ui):
             data = json.load(f)
         agent.messages = data.get("messages", [])
         agent.thinking = data.get("thinking", False)
+        agent.scratch_pad = data.get("scratch_pad", "")
+        agent.todos = data.get("todos", [])
+        agent._todo_counter = data.get("todo_counter", 0)
+        agent.memory = data.get("memory", [])
         st = data.get("stats", {})
         agent.total_prompt_tokens = st.get("prompt_tokens", 0)
         agent.total_comp_tokens = st.get("comp_tokens", 0)
@@ -1239,6 +1722,34 @@ def handle_command(text, agent, ui, server):
     elif cmd == "/clear":
         agent.clear()
         ui.sys("Conversation cleared")
+    elif cmd == "/pad":
+        if agent.scratch_pad:
+            print(f"\n{_w(C.BYELLOW, 'Scratch Pad:')}\n{agent.scratch_pad}\n")
+        else:
+            ui.sys("Scratch pad is empty")
+    elif cmd == "/clearpad":
+        agent.scratch_pad = ""
+        ui.sys("Scratch pad cleared")
+    elif cmd == "/todos":
+        if agent.todos:
+            lines = []
+            for t in agent.todos:
+                mark = "✓" if t["done"] else "○"
+                lines.append(f"  {mark} #{t['id']} [{t['priority']}] {t['task']}")
+            done = sum(1 for t in agent.todos if t["done"])
+            lines.append(f"\n{done}/{len(agent.todos)} completed")
+            print(f"\n{_w(C.BYELLOW, 'Todo List:')}\n" + "\n".join(lines) + "\n")
+        else:
+            ui.sys("Todo list is empty")
+    elif cmd == "/memory":
+        if agent.memory:
+            lines = []
+            for i, m in enumerate(agent.memory, 1):
+                tag = f"[{m['tag']}] " if m.get("tag") else ""
+                lines.append(f"  #{i} ({m['time']}) {tag}{m['note']}")
+            print(f"\n{_w(C.BYELLOW, 'Session Memory:')}\n" + "\n".join(lines) + "\n")
+        else:
+            ui.sys("Session memory is empty")
     elif cmd == "/tokens":
         ui.show_tokens(agent)
     elif cmd == "/tools":
